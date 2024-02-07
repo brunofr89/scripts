@@ -51,7 +51,7 @@ echo -e "${RED}=================================================================
 echo -e "${RED}|""${YELLOW} Vc Viu??? que top esse script? E FOI CRIADO POR BRUNO RODRIGUES""${RED}|"
 echo -e "${RED}=================================================================="
 echo
-echo 'Por favor, digite o número do ambiente desejado:'
+echo 'Por favor, digite o número correspondente a acao desejada:'
 echo -e "${GREEN}||||||||||||||||||||"
 echo -e "${GREEN}||""${YELLOW} (1)""${GREEN}  Backup  ||""${YELLOW}||"
 echo -e "${GREEN}||""${YELLOW} (2)""${GREEN}  Restore ||""${YELLOW}||"
