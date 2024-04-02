@@ -74,29 +74,18 @@ echo
 echo -e "${GREEN}Por favor, insira o nome do projeto:${NC}"
 read project_name
 
-    # Continuação do seu script aqui...
-else
-    echo -e "${GREEN}Nome do cluster inválido.${NC}"
-    exit 1
-fi
-
 # Verifica se o nome do projeto é válido
 if [ -z "$project_name" ]; then
     echo -e "${GREEN}Nome do projeto não pode estar vazio.${NC}"
     exit 1
 fi
 
-# Solicitar o nome do username a ser alterdo
-echo -e "${GREEN}Por favor, insira o nome do username que deve ser aplicado nas secrets:${NC}"
-read new_username
-
-# Solicitar o nome do password a ser alterdo
-echo -e "${GREEN}Por favor, insira o nome do password que deve ser aplicado nas secrets:${NC}"
-read new_password
-
 
 # Obter todos os nomes de secretos que começam com "repo-"
 secrets=$(kubectl -n argocd get secrets | grep '^repo-*' | awk '{print $1}')
+
+# Inicialize uma variável para contar o número de segredos encontrados
+secret_count=0
 
 # Loop sobre cada nome de segredo
 for secret_name in $secrets; do
@@ -106,17 +95,32 @@ for secret_name in $secrets; do
     # Verificar se o valor do projeto é igual ao projeto fornecido pelo usuário
     if [[ "$project_value" == "$project_name" ]]; then
         echo "Secret: $secret_name, Project: $project_value"
+((secret_count++)) # Incrementa o contador de segredos
     fi
 done    
 
+# Se nenhum segredo for encontrado com o nome do projeto informado, exiba a mensagem de erro
+    if [ $secret_count -eq 0 ]; then
+        echo -e "${RED}Erro: Nenhum segredo encontrado para o projeto '$project_name' no ArgoCD ou o nome do projeto está inválido.${NC}"
+        exit 1
+    fi
+
+# Solicitar o nome do username a ser alterdo
+echo -e "${GREEN}Por favor, insira o nome do username que deve ser aplicado nas secrets:${NC}"
+read new_username
+
+# Solicitar o nome do password a ser alterdo
+echo -e "${GREEN}Por favor, insira o nome do password que deve ser aplicado nas secrets:${NC}"
+read new_password
+
+    # Loop sobre cada nome de segredo novamente para atualizar as secrets
 for secret_name in $secrets; do
     # Obter o valor do campo .data.project e decodificar
     project_value=$(kubectl -n argocd get secret $secret_name -o jsonpath='{.data.project}' | base64 --decode)
     
     # Verificar se o valor do projeto começa com "reverse-logistic"
-    if [[ $project_value == reverse-logistic* ]]; then
+    if [[ $project_value == $project_name ]]; then
         echo "Atualizando secret: $secret_name"
-
         
         # Aplicar os novos valores usando kubectl patch
         kubectl -n argocd patch secret $secret_name -p '{"data": {"password": "'$(echo -n $new_password | base64)'"}}'
@@ -125,3 +129,8 @@ for secret_name in $secrets; do
         echo -e  "${GREEN}Valores atualizados para password: $new_password, username: $new_username${NC}"
     fi
 done
+
+else
+    echo -e "${GREEN}Nome do cluster inválido.${NC}"
+    exit 1
+fi
