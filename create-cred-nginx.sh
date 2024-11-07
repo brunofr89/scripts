@@ -39,7 +39,8 @@ echo "${RED}#######""${GREEN}........""${RED}###########""${GREEN}..............
 echo "${RED}########""${GREEN}......""${RED}###########################################""${GREEN}......""${RED}########"
 echo "${RED}#########""${GREEN}....""${RED}#############################################""${GREEN}....""${RED}#########"
 echo "${RED}======================================================================="
-echo "${RED}|""${YELLOW}  ESTE FABULOSO SCRIPT FOI CRIADO POR BRUNO RODRIGUES              ""${RED}  |"
+echo "${RED}|""${YELLOW}         ESTE FABULOSO SCRIPT FOI CRIADO POR BRUNO RODRIGUES""${RED}         |"
+echo "${RED}|""${YELLOW}                  MAX PEIXOTO e CARLOS LOURENCO""${RED}                      |"
 echo "${RED}======================================================================="
 echo "${RED}======================================================================="
 echo "${RED}|""${GREEN}  Criar credenciais de autenticação via nginx                   ""${RED}     |"
@@ -70,10 +71,10 @@ read -p "microserviço origem: " MS_ORIGEM
 echo  "${BLUE}Nome do microserviço que vai receber a requisição:${NC}"
 read -p "microserviço destino: " MS_DESTINO
 
-echo  "${BLUE}Namespace:${NC}"
+echo  "${BLUE}Namespace do microserviço de destino :${NC}"
 read -p "ns: " NAMESPACE
 
-echo  "${BLUE}URL do microserviço (DOMINIO/PATH, exemplo: api-rd-internal-dev.raiadrogasil.io/v1/api/customers):${NC}"
+echo  "${BLUE}URL do microserviço (DOMINIO/PATH, exemplo: api-rd-internal-dev.raiadrogasil.io/v1/api/customers/):${NC}"
 read -p "URL: " URL_PATH
 
 # Extrair URL e PATH
@@ -137,5 +138,10 @@ echo ${YELLOW}VALOR DE AUTH DECODIFICADO${NC}
 echo $NEW_AUTH_SECRET_CLEAN | base64 -d
 echo 
 echo "${BLUE}Credenciais de acesso são -> ${NC} ${YELLOW}USER:${NC} ${GREEN}$MS_ORIGEM${NC} ${YELLOW}PASS:${NC} ${GREEN}$MS_DESTINO${NC}"
+
+AUTH_BASE64=$(echo -n "$MS_ORIGEM"':'"$MS_DESTINO" | base64)
+
+echo ${BLUE}Valor da credencial em base64 | TOKEN${NC}
+echo ${GREEN}$AUTH_BASE64${NC}
 
 fi
