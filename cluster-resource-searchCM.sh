@@ -4,15 +4,14 @@
  
 <<Description
     Para executar este script, salve este arquivo no diretório "/usr/local/bin/" 
-    e aplique permissão de execução "chmod +x envaws" (recomendado) após este utilize o comando: 'argo-cred-update.sh'
-    Este script irá fazer a subistituicao do username e passord em todas as secrets do argocd correspondentes ao projeto informado.
+    e aplique permissão de execução "chmod +x envaws" (recomendado) após este utilize o comando: 'cluster-url-search'
+    Este script realiza uma busca por um HOST(URL) em todos os ingress de todos os namespaces clusters configurados para identificar a qual cluster pertence a URL
 Description
 
 #Preto      \033[0;30m
 #Vermelho   \033[0;31m
 #Verde      \033[0;32m
 #Amarelo    \033[0;33m
-#Azul       \033[0;34m
 #Magenta    \033[0;35m
 #Ciano      \033[0;36m
 
@@ -20,7 +19,7 @@ WHITE="\033[0;37m"
 RED="\033[0;31m"
 GREEN="\033[0;32m"
 YELLOW="\033[0;33m"
-NC='\033[0m'
+BLUE="\033[0;34m"
 
 echo -e "${RED}#######################################################################"
 echo -e "${RED}#############################""${GREEN}.............""${RED}#############################"
@@ -50,20 +49,32 @@ echo -e "${RED}#########""${GREEN}....""${RED}##################################
 echo -e "${RED}======================================================================="
 echo -e "${RED}|""${YELLOW}  ESTE FABULOSO SCRIPT FOI CRIADO POR BRUNO RODRIGUES E MAX PEIXOTO""${RED}  |"
 echo -e "${RED}======================================================================="
-echo -e "${RED}======================================================================="
-echo -e "${RED}|""${GREEN}  Alterar username e password das secrets dos projetos do argocd""${RED}     |"
-echo -e "${RED}|""${GREEN}  Obs: Necessario logar na conta AWS onde o cluster esta provisionado""${RED}|"
-echo -e "${RED}======================================================================="
+echo
+echo -e "${WHITE}Informe o HOST(URL) do recurso que deseja encontrar a qual cluster pertence"
+
+# Função para imprimir em vermelho
+print_in_red() {
+    echo -e "$RED$1$WHITE"
+}
+
+# Função para imprimir em amarelo
+print_in_yellow() {
+    echo -e "$YELLOW$1$WHITE"
+}
+
+# Função para imprimir em azul
+print_in_blue() {
+    echo -e "$BLUE$1$WHITE"
+}
+
+# Função para imprimir em verde
+print_in_green() {
+    echo -e "$GREEN$1$WHITE"
+}
 
 # Solicitar o nome do cluster ao usuário
-echo -e "${GREEN}Por favor, insira o nome do cluster:${NC}"
+echo -e "${BLUE}Por favor, insira o nome do cluster:"
 read cluster_name
-
-# Verifica se o nome do cluster é válido
-if [ -z "$cluster_name" ]; then
-    echo -e "${GREEN}Nome do projeto não pode estar vazio.${NC}"
-    exit 1
-fi
 
 # Atualizar a configuração do kubectl com base no nome do cluster
 aws eks --region us-east-1 update-kubeconfig --name "$cluster_name"
@@ -71,74 +82,50 @@ aws eks --region us-east-1 update-kubeconfig --name "$cluster_name"
 # Verifica se o cluster é válido antes de prosseguir
 if [ $? -eq 0 ]; then
     # Obtém o nome do contexto atualmente logado no cluster
-clusterlogin=$(kubectl config current-context)
+    clusterlogin=$(kubectl config current-context)
 
     # Exibe o nome do cluster apenas se a configuração do kubectl for bem-sucedida
-echo
-echo -e "Logado no cluster ""${GREEN}$clusterlogin${NC}"
-echo
+    echo
+    echo -e "${BLUE}Logado no cluster ""${GREEN}$clusterlogin"
+    echo
 
-# Solicitar o nome do projeto ao usuário
-echo -e "${GREEN}Por favor, insira o nome do projeto:${NC}"
-read project_name
+    # Pergunta pela URL que deve ser buscada
+    echo -e "${WHITE}Informe a URL para busca:"
+    read url_to_search
 
-# Verifica se o nome do projeto é válido
-if [ -z "$project_name" ]; then
-    echo -e "${GREEN}Nome do projeto não pode estar vazio.${NC}"
-    exit 1
-fi
+    # Tenta executar o comando até 3 vezes em caso de falha
+    for attempt in {1..3}; do
+        # Comando para buscar a URL nos ConfigMaps e exibir o namespace e nome do ConfigMap
+        results=$(kubectl get cm --all-namespaces -o json | jq -r --arg url "$url_to_search" '.items[] | select(.data | tostring | contains($url)) | .metadata.namespace + " " + .metadata.name')
 
-
-# Obter todos os nomes de secretos que começam com "repo-"
-secrets=$(kubectl -n argocd get secrets | grep '^repo-*' | awk '{print $1}')
-
-# Inicialize uma variável para contar o número de segredos encontrados
-secret_count=0
-
-# Loop sobre cada nome de segredo
-for secret_name in $secrets; do
-    # Obter o valor do campo .data.project e decodificar
-    project_value=$(kubectl -n argocd get secret $secret_name -o jsonpath='{.data.project}' | base64 --decode)
-    
-    # Verificar se o valor do projeto é igual ao projeto fornecido pelo usuário
-    if [[ "$project_value" == "$project_name" ]]; then
-        echo "Secret: $secret_name, Project: $project_value"
-((secret_count++)) # Incrementa o contador de segredos
-    fi
-done    
-
-# Se nenhum segredo for encontrado com o nome do projeto informado, exiba a mensagem de erro
-    if [ $secret_count -eq 0 ]; then
-        echo -e "${RED}Erro: Nenhum segredo encontrado para o projeto '$project_name' no ArgoCD ou o nome do projeto está inválido.${NC}"
-        exit 1
-    fi
-
-# Solicitar o nome do username a ser alterdo
-echo -e "${GREEN}Por favor, insira o nome do username que deve ser aplicado nas secrets:${NC}"
-read new_username
-
-# Solicitar o nome do password a ser alterdo
-echo -e "${GREEN}Por favor, insira o nome do password que deve ser aplicado nas secrets:${NC}"
-read new_password
-
-    # Loop sobre cada nome de segredo novamente para atualizar as secrets
-for secret_name in $secrets; do
-    # Obter o valor do campo .data.project e decodificar
-    project_value=$(kubectl -n argocd get secret $secret_name -o jsonpath='{.data.project}' | base64 --decode)
-    
-    # Verificar se o valor do projeto começa com "reverse-logistic"
-    if [[ $project_value == $project_name ]]; then
-        echo "Atualizando secret: $secret_name"
-        
-        # Aplicar os novos valores usando kubectl patch
-        kubectl -n argocd patch secret $secret_name -p '{"data": {"password": "'$(echo -n $new_password | base64)'"}}'
-        kubectl -n argocd patch secret $secret_name -p '{"data": {"username": "'$(echo -n $new_username | base64)'"}}'
-        
-        echo -e  "${GREEN}Valores atualizados para password: $new_password, username: $new_username${NC}"
-    fi
-done
-
+        if [ $? -eq 0 ] && [ -n "$results" ]; then
+            echo -e "${GREEN}URL encontrada nos seguintes ConfigMaps:\e[0m"
+            
+            # Organiza os resultados por namespace e exibe com cores
+            echo "$results" | awk -v yellow="$YELLOW" -v blue="$BLUE" -v green="$GREEN" -v white="$WHITE" '
+            {
+                namespace=$1
+                configmap=$2
+                configmaps[namespace]=configmaps[namespace] configmap"\n"
+            }
+            END {
+                for (ns in configmaps) {
+                    # Imprime o namespace com a cor amarela
+                    print yellow "ConfigMaps do namespace " ns white ":"
+                    # Imprime os nomes dos configmaps em azul
+                    print blue configmaps[ns] white
+                }
+            }
+            '
+            break
+        else
+            echo "Tentativa $attempt falhou. Tentando novamente..."
+            if [ $attempt -eq 3 ]; then
+                echo "Erro: Não foi possível encontrar a URL nos ConfigMaps após 3 tentativas."
+            fi
+            sleep 2  # Espera 2 segundos antes da próxima tentativa
+        fi
+    done
 else
-    echo -e "${GREEN}Nome do cluster inválido.${NC}"
-    exit 1
+    print_in_red "Falha ao atualizar o kubeconfig. Verifique a conexão com o AWS EKS."
 fi
