@@ -1,24 +1,24 @@
 #!/bin/bash
-#Mantenedor: Bruno Rodrigues
- 
-<<Description
-    Para executar este script, salve este arquivo no diretório "/usr/local/bin/" 
-    e aplique permissão de execução "chmod +x GCPRelatorioSnapOcta.sh " (recomendado) após este utilize o comando: 'GCPRelatorioSnapOcta'
-Description
+# Mantenedor: Bruno Rodrigues
+# ---------------------------------------------------------
+# Descrição:
+#   Extrai snapshots de todos os projetos da organização ou
+#   apenas dos projetos Octa definidos manualmente.
+#   Gera um arquivo CSV por projeto.
+#
+# Uso:
+#   Salve este arquivo em /usr/local/bin/
+#   chmod +x GCPRelatorioSnapOcta.sh
+#   Execute: GCPRelatorioSnapOcta
+# ---------------------------------------------------------
 
-#Preto      \033[0;30m
-#Vermelho   \033[0;31m
-#Verde      \033[0;32m
-#Amarelo    \033[0;33m
-#Magenta    \033[0;35m
-#Ciano      \033[0;36m
-
+# === Cores ===
 RED="\033[0;31m"
 GREEN="\033[0;32m"
 YELLOW="\033[0;33m"
-BLUE='\033[0;34m'
-NC='\033[0m'
+NC="\033[0m"
 
+clear
 echo -e "${RED}#######################################################################"
 echo -e "${RED}#############################""${GREEN}.............""${RED}#############################"
 echo -e "${RED}#########################""${GREEN}.....................""${RED}#########################"
@@ -45,63 +45,44 @@ echo -e "${RED}#######""${GREEN}........""${RED}###########""${GREEN}...........
 echo -e "${RED}########""${GREEN}......""${RED}###########################################""${GREEN}......""${RED}########"
 echo -e "${RED}#########""${GREEN}....""${RED}#############################################""${GREEN}....""${RED}#########"
 echo -e "${RED}======================================================================="
-echo -e "${RED}|""${YELLOW}  ESTE FABULOSO SCRIPT FOI CRIADO POR BRUNO RODRIGUES""${RED}                 |"
+echo -e "${RED}|""${YELLOW} ESTE FABULOSO SCRIPT FOI CRIADO POR BRUNO RODRIGUES ""${RED}|"
 echo -e "${RED}=======================================================================${NC}"
 
+# === Configurações ===
 ORG_ID=574387196332
-ALL_PROJECTS=()
+# Lista fixa dos projetos Octa (solicitação oficial)
+PROJECTS=(
+  "octa-pantheon-sa-east1-001"
+  "octa-prod-us-east1-001"
+  "octa-prod-southameri-east1-001"
+  "octa-prod-sa-east1-003"
+  "octa-prod-sa-east1-004"
+)
 
-GREEN='\033[0;32m'
-NC='\033[0m' # Sem cor (reset)
-
-echo "🔍 Buscando projetos na organização $ORG_ID..."
-
-# Listar projetos diretamente na organização
-ORG_PROJECTS=$(gcloud projects list \
-  --filter="parent.type=organization parent.id=$ORG_ID" \
-  --format="value(projectId)")
-ALL_PROJECTS+=($ORG_PROJECTS)
-
-# Listar pastas da organização 
-FOLDER_IDS=$(gcloud resource-manager folders list \
-  --organization=$ORG_ID \
-  --format="value(name)")
-
-# Iterar sobre as pastas para listar projetos
-for FOLDER in $FOLDER_IDS; do
-  FOLDER_ID=$(echo $FOLDER | cut -d'/' -f2)
-  PROJECTS=$(gcloud projects list \
-    --filter="parent.type=folder parent.id=$FOLDER_ID" \
-    --format="value(projectId)")
-  ALL_PROJECTS+=($PROJECTS)
-done
-
-# Verificar quais projetos têm snapshots
 echo ""
-echo "💾 Verificando quais projetos têm snapshots..."
+echo "🔍 Iniciando extração de snapshots..."
+echo ""
 
-for PROJECT in "${ALL_PROJECTS[@]}"; do
-  echo "🔎 Checando snapshots no projeto: $PROJECT"
-  gcloud config set project "$PROJECT" --quiet > /dev/null 2>&1
+for PROJECT in "${PROJECTS[@]}"; do
+  echo -e "🧩 Processando projeto: ${GREEN}${PROJECT}${NC}"
 
-  SNAPSHOTS=$(gcloud compute snapshots list \
-    --format="csv(name, creationTimestamp, storageLocations, diskSizeGb, storageBytes, sourceDisk)" \
-    --quiet 2>/dev/null)
+  OUTPUT_FILE="${PROJECT}_snapshots.csv"
 
-  if [[ -n "$SNAPSHOTS" && "$SNAPSHOTS" != "name,creationTimestamp,storageLocations,diskSizeGb,storageBytes,sourceDisk" ]]; then
-    echo -e "✅ Projeto com snapshots: ${GREEN}$PROJECT${NC}"
+  # Executa o comando com as colunas e timezone corretos
+  gcloud compute snapshots list \
+    --project "$PROJECT" \
+    --format="csv(name, creationTimestamp.date(tz=BRT), storageLocations, diskSizeGb, storageBytes, status, sourceDisk, sourceSnapshotSchedulePolicy.scope(resourcePolicies).yesno(no=Manual))" \
+    --sort-by=creationTimestamp \
+    | tee "$OUTPUT_FILE"
 
-    # Cria um arquivo específico para cada projeto
-    FILE_NAME="${PROJECT}_snapshot.csv"
-    echo "projectId,name,creationTimestamp,storageLocations,diskSizeGb,storageBytes,sourceDisk" > "$FILE_NAME"
-
-    # Adiciona os snapshots no arquivo CSV do projeto
-    echo "$SNAPSHOTS" | tail -n +2 | while IFS= read -r line; do
-      echo "$PROJECT,$line" >> "$FILE_NAME"
-    done
-
-    echo "📄 Snapshots do projeto $PROJECT salvos em: $FILE_NAME"
+  # Confirmação visual
+  if [[ -s "$OUTPUT_FILE" ]]; then
+    echo -e "✅ CSV salvo em: ${GREEN}${OUTPUT_FILE}${NC}"
   else
-    echo "🚫 Sem snapshots em: $PROJECT"
+    echo -e "🚫 Nenhum snapshot encontrado em ${YELLOW}${PROJECT}${NC}"
   fi
+
+  echo ""
 done
+
+echo -e "${GREEN}🎉 Extração concluída! Todos os relatórios estão no diretório atual.${NC}"
